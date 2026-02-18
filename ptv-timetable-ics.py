@@ -4,6 +4,7 @@ import os
 import shutil
 import csv
 import datetime
+import uuid
 from zoneinfo import ZoneInfo
 from icalendar import Calendar, Event
 from bottle import route, request, response, run, template
@@ -114,7 +115,9 @@ def index(requested_stop_id):
     stop_lon = stop["stop_lon"]
 
     calendar = Calendar()
-    calendar["SUMMARY"] = "ptv-timetable-ics"
+    calendar.add("PRODID", "-//Nht Nhan//ptv-timetable-ics")
+    calendar.add("VERSION", "2.0")
+    calendar.add("SUMMARY", "ptv-timetable-ics")
 
     route_direction_set = set()
     for route_id in request.query.keys():
@@ -143,21 +146,23 @@ def index(requested_stop_id):
         if stop_id == requested_parent_id and (route_id, direction_id) in route_direction_set:
             event = Event()
 
-            event["SUMMARY"] = f"{route_id} to {trip_headsign}"
-            event["DTSTART"] = datetime.datetime.fromisoformat("T".join((start_date, departure_time))).replace(tzinfo=ZoneInfo("Australia/Melbourne"))
-            event["DTEND"] = event["DTSTART"]
-            event["GEO"] = ";".join((stop_lat, stop_lon))
-            event["LOCATION"] = stop_name
+            event.add("DTSTAMP", datetime.datetime.now())
+            event.add("UID", f"{uuid.uuid4()}@nhan.au")
+            event.add("SUMMARY", f"{trip_headsign} {route_id}")
+            event.add("DTSTART", datetime.datetime.fromisoformat("T".join((start_date, departure_time))).replace(tzinfo=ZoneInfo("Australia/Melbourne")))
+            event.add("DTEND", event["DTSTART"])
+            event.add("GEO", (stop_lat, stop_lon))
+            event.add("LOCATION", stop_name)
             
-            event["RDATE"] = [datetime.date.fromisoformat(addition["date"]) for addition in additions[service_id]]
-            event["EXDATE"] = [datetime.date.fromisoformat(removal["date"]) for removal in removals[service_id]]
+            event.add("RDATE", [datetime.date.fromisoformat(addition["date"]) for addition in additions[service_id]])
+            event.add("EXDATE", [datetime.date.fromisoformat(removal["date"]) for removal in removals[service_id]])
 
-            event["DESCRIPTION"] = "\n".join((
+            event.add("DESCRIPTION", "\n".join((
                 pickup_type_descriptions[pickup_type],
                 drop_off_type_descriptions[drop_off_type],
                 wheelchair_accessible_descriptions[wheelchair_accessible],
                 bikes_allowed_descriptions[bikes_allowed]
-            ))
+            )))
 
             event.add("RRULE", {
                 "FREQ": "WEEKLY",
@@ -169,6 +174,6 @@ def index(requested_stop_id):
     calendar.add_missing_timezones()
 
     response.content_type = "text/calendar; charset=UTF-8"
-    return calendar.to_ical().decode("utf-8").replace("\r\n", "\n").strip()
+    return calendar.to_ical().decode("utf-8")
 
 run(host="0.0.0.0", port=80)
