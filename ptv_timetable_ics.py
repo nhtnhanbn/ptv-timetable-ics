@@ -1,15 +1,11 @@
 import datetime
 import uuid
 from zoneinfo import ZoneInfo
+import sqlite3
 from icalendar import Calendar, Event
 from bottle import route, request, response, run
 
-services = {}
-additions = {}
-removals = {}
-stop_times = []
-stops = {}
-trips = {}
+from get_ancestor import get_ancestor
 
 weekdays = [
     ("monday", "MO"),
@@ -47,12 +43,6 @@ bikes_allowed_descriptions = {
     "2": "No bicycles are allowed on this trip."
 }
 
-def get_parent(stop_id):
-    parent_id = stop_id
-    while stops[parent_id]["parent_station"] != "":
-        parent_id = stops[parent_id]["parent_station"]
-    return parent_id
-
 # Serve ICS
 def date_time(date_string, time_string):
     date = datetime.datetime.fromisoformat(date_string).replace(tzinfo=ZoneInfo("Australia/Melbourne"))
@@ -60,13 +50,16 @@ def date_time(date_string, time_string):
     time = datetime.timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds))
     return date + time
 
-@route("/<requested_stop_id>")
+@route("/<requested_stop_id:path>")
 def index(requested_stop_id):
-    requested_parent_id = get_parent(requested_stop_id)
-    stop = stops[requested_parent_id]
-    stop_name = stop["stop_name"]
-    stop_lat = stop["stop_lat"]
-    stop_lon = stop["stop_lon"]
+    db_connection = sqlite3.connect("gtfs.db", timeout=float("inf"))
+    db_cursor = db_connection.cursor()
+
+    requested_stop_id = get_ancestor(requested_stop_id, db_cursor)
+    _, stop_name, stop_lat, stop_lon, _ = db_cursor.execute(
+        "SELECT * FROM stops WHERE stop_id=:stop_id",
+        {"stop_id": requested_stop_id}
+    ).fetchone()
 
     calendar = Calendar()
     calendar.add("PRODID", "-//Nht Nhan//ptv-timetable-ics")
@@ -78,28 +71,28 @@ def index(requested_stop_id):
         for direction_id in request.query.getall(route_id):
             route_direction_set.add((route_id, direction_id))
 
-    for stop_time in stop_times:
-        trip_id = stop_time["trip_id"]
-        stop_id = stop_time["stop_id"]
-
-        trip = trips[trip_id]
-        route_id = trip["route_id"]
-        direction_id = trip["direction_id"]
-
-        if stop_id == requested_parent_id and (route_id, direction_id) in route_direction_set:
-            departure_time = stop_time["departure_time"]
-            pickup_type = stop_time.get("pickup_type", "0")
-            drop_off_type = stop_time.get("drop_off_type", "0")
-            
-            service_id = trip["service_id"]
-            trip_headsign = trip["trip_headsign"]
-            wheelchair_accessible = trip.get("wheelchair_accessible", "0")
-            bikes_allowed = trip.get("bikes_allowed", "0")
-
-            service = services[service_id]
-            start_date = service["start_date"]
-            end_date = service["end_date"]
+    for trip_id, departure_time, _, _, pickup_type, drop_off_type in db_cursor.execute(
+        "SELECT * FROM stop_times WHERE stop_id=:stop_id",
+        {"stop_id": requested_stop_id}
+    ).fetchall():
+        route_id, service_id, trip_id, trip_headsign, direction_id, wheelchair_accessible, bikes_allowed = db_cursor.execute(
+            "SELECT * FROM trips WHERE trip_id=:trip_id",
+            {"trip_id": trip_id}
+        ).fetchone()
+        
+        if (route_id, direction_id) in route_direction_set:
+            service_id, start_date, end_date = db_cursor.execute(
+                "SELECT service_id, start_date, end_date FROM services WHERE service_id=:service_id",
+                {"service_id": service_id}
+            ).fetchone()
+            onday = db_cursor.execute(
+                "SELECT monday, tuesday, wednesday, thursday, friday, saturday, sunday FROM services WHERE service_id=:service_id",
+                {"service_id": service_id}
+            ).fetchone()
             start_datetime = date_time(start_date, departure_time)
+
+            addition = db_cursor.execute("SELECT date FROM additions WHERE service_id=:service_id", {"service_id": service_id}).fetchall()
+            removal = db_cursor.execute("SELECT date FROM removals WHERE service_id=:service_id", {"service_id": service_id}).fetchall()
 
             event = Event()
             event.add("DTSTAMP", datetime.datetime.now())
@@ -109,12 +102,12 @@ def index(requested_stop_id):
             event.add("LOCATION", stop_name)
             event.add("DTSTART", start_datetime)
             event.add("DTEND", start_datetime+datetime.timedelta(minutes=1))
-            event.add("RDATE", [date_time(addition["date"], departure_time) for addition in additions[service_id]])
-            event.add("EXDATE", [date_time(removal["date"], departure_time) for removal in removals[service_id]])
+            event.add("RDATE", [date_time(date, departure_time) for (date,) in addition])
+            event.add("EXDATE", [date_time(date, departure_time) for (date,) in removal])
 
             event.add("RRULE", {
                 "FREQ": "WEEKLY",
-                "BYDAY": [ics_day for gtfs_day, ics_day in weekdays if service[gtfs_day] == "1"],
+                "BYDAY": [ics_day for i, (gtfs_day, ics_day) in enumerate(weekdays) if onday[i] == "1"],
                 "UNTIL": date_time(end_date, departure_time)
             })
 
@@ -126,6 +119,9 @@ def index(requested_stop_id):
             )))
 
             calendar.add_component(event)
+    
+    db_connection.close()
+    
     calendar.add_missing_timezones()
 
     response.content_type = "text/calendar; charset=UTF-8"

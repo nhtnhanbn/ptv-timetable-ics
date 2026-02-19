@@ -45,7 +45,8 @@ db_cursor.executescript(
 		stop_name TEXT NOT NULL,
 		stop_lat TEXT NOT NULL,
 		stop_lon TEXT NOT NULL,
-		parent_station TEXT
+		parent_station TEXT,
+		FOREIGN KEY (parent_station) REFERENCES stops(stop_id)
 	);
 	CREATE TABLE trips(
 		route_id TEXT NOT NULL,
