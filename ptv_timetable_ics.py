@@ -127,4 +127,4 @@ def index(requested_stop_id):
     response.content_type = "text/calendar; charset=UTF-8"
     return calendar.to_ical().decode("utf-8")
 
-run(host="0.0.0.0", port=80)
+run(host="0.0.0.0", port=3002)
