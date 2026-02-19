@@ -8,7 +8,7 @@ import uuid
 from zoneinfo import ZoneInfo
 from threading import Timer
 from icalendar import Calendar, Event
-from bottle import route, request, response, run, template
+from bottle import route, request, response, run
 
 services = {}
 additions = {}
