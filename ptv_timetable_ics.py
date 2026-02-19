@@ -1,12 +1,6 @@
-from urllib.request import urlretrieve
-from zipfile import ZipFile
-import os
-import shutil
-import csv
 import datetime
 import uuid
 from zoneinfo import ZoneInfo
-from threading import Timer
 from icalendar import Calendar, Event
 from bottle import route, request, response, run
 
@@ -58,58 +52,6 @@ def get_parent(stop_id):
     while stops[parent_id]["parent_station"] != "":
         parent_id = stops[parent_id]["parent_station"]
     return parent_id
-
-# Data retrieval
-def retrieve_data():
-    urlretrieve("http://data.ptv.vic.gov.au/downloads/gtfs.zip", "gtfs.zip")
-    print("Retrieved gtfs.zip")
-
-    with ZipFile("gtfs.zip", "r") as filezip:
-        filezip.extractall()
-        print("Unzipped gtfs.zip")
-
-        for name in filezip.namelist():
-            if name.endswith("/google_transit.zip"):
-                directory = name.removesuffix("google_transit.zip")
-                with ZipFile(name, "r") as filezippy:
-                    filezippy.extractall(directory, ("calendar.txt", "calendar_dates.txt", "stop_times.txt", "stops.txt", "trips.txt"))
-                    for namey in filezippy.namelist():
-                        path = directory + namey
-                        if path.endswith("calendar.txt"):
-                            with open(path, newline="", encoding="utf-8-sig") as filecsv:
-                                for row in csv.DictReader(filecsv):
-                                    services[row["service_id"]] = row
-                                    additions[row["service_id"]] = []
-                                    removals[row["service_id"]] = []
-                        if path.endswith("calendar_dates.txt"):
-                            with open(path, newline="", encoding="utf-8-sig") as filecsv:
-                                for row in csv.DictReader(filecsv):
-                                    if row["exception_type"] == "1":
-                                        additions[row["service_id"]].append(row)
-                                    if row["exception_type"] == "2":
-                                        removals[row["service_id"]].append(row)
-                        if path.endswith("stop_times.txt"):
-                            with open(path, newline="", encoding="utf-8-sig") as filecsv:
-                                for row in csv.DictReader(filecsv):
-                                    stop_times.append(row)
-                        if path.endswith("stops.txt"):
-                            with open(path, newline="", encoding="utf-8-sig") as filecsv:
-                                for row in csv.DictReader(filecsv):
-                                    stops[row["stop_id"]] = row
-                        if path.endswith("trips.txt"):
-                            with open(path, newline="", encoding="utf-8-sig") as filecsv:
-                                for row in csv.DictReader(filecsv):
-                                    trips[row["trip_id"]] = row
-                shutil.rmtree(directory, ignore_errors=True)
-                print("Processed " + directory)
-    os.remove("gtfs.zip")
-
-    for stop_time in stop_times:
-        stop_time["stop_id"] = get_parent(stop_time["stop_id"])
-
-    Timer(86400.0, retrieve_data).start()
-
-retrieve_data()
 
 # Serve ICS
 def date_time(date_string, time_string):

@@ -34,8 +34,8 @@ db_cursor.executescript(
 		departure_time TEXT NOT NULL,
 		stop_id TEXT NOT NULL,
 		stop_sequence TEXT NOT NULL,
-		pickup_type TEXT DEFAULT "0" CHECK( pickup_type IN ("0", "1", "2", "3") ),
-		drop_off_type TEXT DEFAULT "0" CHECK( drop_off_type IN ("0", "1", "2", "3") ),
+		pickup_type TEXT CHECK( pickup_type IN ("0", "1", "2", "3") ),
+		drop_off_type TEXT CHECK( drop_off_type IN ("0", "1", "2", "3") ),
 		PRIMARY KEY (trip_id, stop_sequence),
 		FOREIGN KEY (trip_id) REFERENCES trips(trip_id),
 		FOREIGN KEY (stop_id) REFERENCES stops(stop_id)
@@ -53,8 +53,8 @@ db_cursor.executescript(
 		trip_id TEXT PRIMARY KEY,
 		trip_headsign TEXT,
 		direction_id TEXT NOT NULL,
-		wheelchair_accessible TEXT DEFAULT "0" CHECK( wheelchair_accessible IN ("0", "1", "2") ),
-		bikes_allowed TEXT DEFAULT "0" CHECK( bikes_allowed IN ("0", "1", "2") ),
+		wheelchair_accessible TEXT CHECK( wheelchair_accessible IN ("0", "1", "2") ),
+		bikes_allowed TEXT CHECK( bikes_allowed IN ("0", "1", "2") ),
 		FOREIGN KEY (service_id) REFERENCES services(service_id)
 	);
 	"""
