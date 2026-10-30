@@ -32,7 +32,7 @@ with ZipFile("gtfs.zip", "r") as filezip:
 							for row in csv.DictReader(filecsv):
 								row["service_id"] = directory + row["service_id"]
 								db_cursor.execute(
-									"INSERT INTO services VALUES(:service_id, :monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday, :start_date, :end_date)",
+									"INSERT OR REPLACE INTO services VALUES(:service_id, :monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday, :start_date, :end_date)",
 									row
 								)
 					if path.endswith("calendar_dates.txt"):
@@ -41,12 +41,12 @@ with ZipFile("gtfs.zip", "r") as filezip:
 								row["service_id"] = directory + row["service_id"]
 								if row["exception_type"] == "1":
 									db_cursor.execute(
-										"INSERT INTO additions VALUES(:service_id, :date)",
+										"INSERT OR REPLACE INTO additions VALUES(:service_id, :date)",
 										row
 									)
 								if row["exception_type"] == "2":
 									db_cursor.execute(
-										"INSERT INTO removals VALUES(:service_id, :date)",
+										"INSERT OR REPLACE INTO removals VALUES(:service_id, :date)",
 										row
 									)
 					if path.endswith("stops.txt"):
@@ -58,7 +58,7 @@ with ZipFile("gtfs.zip", "r") as filezip:
 								else:
 									row["parent_station"] = directory + row["parent_station"]
 								db_cursor.execute(
-									"INSERT INTO stops VALUES(:stop_id, :stop_name, :stop_lat, :stop_lon, :parent_station)",
+									"INSERT OR REPLACE INTO stops VALUES(:stop_id, :stop_name, :stop_lat, :stop_lon, :parent_station)",
 									row
 								)
 					if path.endswith("trips.txt"):
@@ -68,7 +68,7 @@ with ZipFile("gtfs.zip", "r") as filezip:
 								if "bikes_allowed" not in row:
 									row["bikes_allowed"] = "0"
 								db_cursor.execute(
-									"INSERT INTO trips VALUES(:route_id, :service_id, :trip_id, :trip_headsign, :direction_id, :wheelchair_accessible, :bikes_allowed)",
+									"INSERT OR REPLACE INTO trips VALUES(:route_id, :service_id, :trip_id, :trip_headsign, :direction_id, :wheelchair_accessible, :bikes_allowed)",
 									row
 								)
 				
@@ -79,7 +79,7 @@ with ZipFile("gtfs.zip", "r") as filezip:
 							for row in csv.DictReader(filecsv):
 								row["stop_id"] = get_ancestor(directory + row["stop_id"], db_cursor)
 								db_cursor.execute(
-									"INSERT INTO stop_times VALUES(:trip_id, :departure_time, :stop_id, :stop_sequence, :pickup_type, :drop_off_type)",
+									"INSERT OR REPLACE INTO stop_times VALUES(:trip_id, :departure_time, :stop_id, :stop_sequence, :pickup_type, :drop_off_type)",
 									row
 								)
 
